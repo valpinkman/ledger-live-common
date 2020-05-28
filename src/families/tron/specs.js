@@ -7,6 +7,7 @@ import { getCryptoCurrencyById, parseCurrencyUnit } from "../../currencies";
 import { pickSiblings } from "../../bot/specs";
 import type { AppSpec } from "../../bot/types";
 import deviceActions from "./speculos-deviceActions";
+import { NetworkDown } from "@ledgerhq/errors";
 
 const currency = getCryptoCurrencyById("tron");
 const minimalAmount = parseCurrencyUnit(currency.units[0], "10");
@@ -17,6 +18,7 @@ const tron: AppSpec<Transaction> = {
   appQuery: {
     model: "nanoS",
     appName: "Tron",
+    appVersion: "0.2.0",
   },
   mutations: [
     {
@@ -97,8 +99,51 @@ const tron: AppSpec<Transaction> = {
               : BigNumber(0)
           );
         expect(expectedAmount.toString()).toBe(
-          account.tronResources.frozen[`${resourceType}`].amount.toString();
+          account.tronResources.frozen[`${resourceType}`].amount.toString()
         );
+        const expectedTP = transaction.amount.plus(
+          accountBeforeTransaction.tronResources.tronPower
+        );
+        expect(expectedTP).toBe(account.tronResources.tronPower);
+      },
+    },
+    {
+      name: "unfreeze bandwith / energy",
+      transaction: ({ account, bridge, amount }) => {
+        invariant(account.tronResources.tronPower.gt(0), "no frozen assets");
+        const currentDate = new Date();
+        invariant(
+          account.tronResources.frozen.bandwidth.expiredAt < currentDate &&
+            currentDate > account.tronResources.frozen.energy.expiredAt,
+          "freeze period not expired yet"
+        );
+        const resourceToUnfreeze =
+          account.tronResources.frozen.bandwidth.expiredAt < currentDate
+            ? "BANDWIDTH"
+            : "ENERGY";
+        let t = bridge.createTransaction(account);
+        t = bridge.updateTransaction(t, {
+          mode: "unfreeze",
+          amount,
+          resource: resourceToUnfreeze,
+        });
+        return t;
+      },
+      deviceAction: deviceActions.acceptTransaction,
+      test: ({
+        account,
+        accountBeforeTransaction,
+        transaction,
+        optimisticOperation,
+        operation,
+      }) => {
+        expect(account.tronResources.frozen).toEqual(
+          expect.not.stringContaining(transaction.resource)
+        );
+        const expectedTronPower = accountBeforeTransaction.tronResources.tronPower.minus(
+          transaction.amount
+        );
+        expect(account.tronResources.tronPower).toEqual(expectedTronPower);
       },
     },
   ],

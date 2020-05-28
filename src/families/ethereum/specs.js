@@ -47,7 +47,7 @@ const ethereum: AppSpec<Transaction> = {
           "parent balance is too low"
         );
         const erc20Account = sample(account.subAccounts);
-        invariant(erc20Account.balance.gt(0), "balance is too low");
+        invariant(erc20Account.balance.gt(0), "token balance is too low");
         let t = bridge.createTransaction(account);
         const sibling = pickSiblings(siblings);
         const recipient = sibling.freshAddress;
